@@ -1434,7 +1434,7 @@ function renderQuizQuestion() {
   const correctCount = q.choices.filter(c => c.isCorrect).length;
   const isMulti = correctCount > 1;
   document.getElementById('quizQMeta').textContent = isMulti
-    ? `Select all that apply · ${correctCount} correct answers`
+    ? 'Select all that apply'
     : 'Choose one';
 
   const fill = document.getElementById('quizFill');
