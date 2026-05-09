@@ -819,9 +819,11 @@ header {
 
 .review-q .ans-line {
   font-size: 14px;
-  margin-top: 4px;
+  margin-top: 6px;
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  align-items: flex-start;
+  line-height: 1.5;
 }
 
 .review-q .ans-line .tag {
@@ -829,8 +831,24 @@ header {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  min-width: 75px;
+  min-width: 90px;
+  flex-shrink: 0;
   color: var(--muted);
+  padding-top: 3px;
+}
+
+.review-q .ans-line .ans-val {
+  flex: 1;
+  word-break: break-word;
+}
+
+.review-q.wrong .ans-line:nth-child(3) .tag {
+  color: var(--wrong);
+}
+
+.review-q.right .ans-line:nth-child(3) .tag,
+.review-q.wrong .ans-line:nth-child(4) .tag {
+  color: var(--correct);
 }
 
 /* ============= ERROR ============= */
@@ -1589,13 +1607,16 @@ function escapeHtml(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-// Format a list of choice indices as "a, b" (sorted alphabetically by letter).
-// Always returns just the letters separated by commas — like the PDF format.
-function formatAnswerLetters(choiceIdxs, choices) {
-  const letters = choiceIdxs
-    .map(idx => choices[idx].label)
-    .sort();
-  return letters.join(', ');
+// Format selected choices as "a) Full text of the choice"
+// For multi-answer questions, joins them with line breaks.
+function formatAnswerWithText(choiceIdxs, choices) {
+  // Sort by original choice letter so output order matches PDF order
+  const sorted = [...choiceIdxs].sort((a, b) =>
+    choices[a].label.localeCompare(choices[b].label)
+  );
+  return sorted
+    .map(idx => `${choices[idx].label}) ${choices[idx].text}`)
+    .join('\n');
 }
 
 // ============================================
@@ -1769,10 +1790,10 @@ function finishQuiz() {
     }
 
     const userText = tq.userAnswer.length
-      ? formatAnswerLetters(tq.userAnswer, q.choices)
+      ? formatAnswerWithText(tq.userAnswer, q.choices)
       : '— skipped —';
     const correctText = correctIdxs.length
-      ? formatAnswerLetters(correctIdxs, q.choices)
+      ? formatAnswerWithText(correctIdxs, q.choices)
       : '— no marked answer —';
     const isMulti = correctIdxs.length > 1;
 
@@ -1784,8 +1805,8 @@ function finishQuiz() {
         <span class="verdict">${isRight ? '✓ Correct' : '✗ Wrong'}</span>
       </div>
       <div class="qtext">${escapeHtml(q.text)}</div>
-      <div class="ans-line"><span class="tag">Your answer</span><span>${escapeHtml(userText)}</span></div>
-      <div class="ans-line"><span class="tag">Correct</span><span>${escapeHtml(correctText)}</span></div>
+      <div class="ans-line"><span class="tag">Your answer</span><span class="ans-val">${escapeHtml(userText).replace(/\n/g, '<br>')}</span></div>
+      <div class="ans-line"><span class="tag">Correct</span><span class="ans-val">${escapeHtml(correctText).replace(/\n/g, '<br>')}</span></div>
     `;
     review.appendChild(div);
   });
