@@ -1326,13 +1326,19 @@ function populatePreview() {
 
   state.questions.forEach((q, i) => {
     if (q.hasMarked) valid++; else missing++;
+    const correctCount = q.choices.filter(c => c.isCorrect).length;
+    const isMulti = correctCount > 1;
     const card = document.createElement('div');
     card.className = 'q-card' + (q.hasMarked ? '' : ' warning');
+    const multiBadge = isMulti
+      ? `<span class="badge" style="background:var(--correct)">Multi · ${correctCount} correct</span>`
+      : '';
     card.innerHTML = `
       <div class="num">${String(i+1).padStart(2,'0')}</div>
       <div class="text">
         ${escapeHtml(q.text)}
         ${q.hasMarked ? '' : '<span class="badge">No answer detected</span>'}
+        ${multiBadge}
         <div class="answers">
           ${q.choices.map(c => `<div class="${c.isCorrect ? 'correct' : ''}">${c.label}) ${escapeHtml(c.text)}</div>`).join('')}
         </div>
@@ -1397,7 +1403,7 @@ document.getElementById('startBtn').addEventListener('click', () => {
     const q = state.questions[p.qIdx];
     const idxs = q.choices.map((_, i) => i);
     p.choiceOrder = shuffleChoices ? shuffle(idxs) : idxs;
-    p.userAnswer = null;
+    p.userAnswer = [];  // array of selected original choice indices
   });
 
   state.testQuestions = pool;
@@ -1425,7 +1431,11 @@ function renderQuizQuestion() {
   document.getElementById('quizQNum').textContent = String(state.currentIdx + 1).padStart(2, '0');
   document.getElementById('quizQLabel').textContent = `Question ${state.currentIdx + 1}`;
   document.getElementById('quizQText').textContent = q.text;
-  document.getElementById('quizQMeta').textContent = 'Choose one';
+  const correctCount = q.choices.filter(c => c.isCorrect).length;
+  const isMulti = correctCount > 1;
+  document.getElementById('quizQMeta').textContent = isMulti
+    ? `Select all that apply · ${correctCount} correct answers`
+    : 'Choose one';
 
   const fill = document.getElementById('quizFill');
   fill.style.width = ((state.currentIdx + 1) / state.testQuestions.length * 100) + '%';
@@ -1434,14 +1444,23 @@ function renderQuizQuestion() {
   choicesEl.innerHTML = '';
   tq.choiceOrder.forEach((origIdx, displayIdx) => {
     const c = q.choices[origIdx];
+    const isSelected = tq.userAnswer.includes(origIdx);
     const div = document.createElement('div');
-    div.className = 'choice' + (tq.userAnswer === origIdx ? ' selected' : '');
+    div.className = 'choice' + (isSelected ? ' selected' : '');
     div.innerHTML = `
-      <div class="marker">${String.fromCharCode(65 + displayIdx)}</div>
+      <div class="marker">${isMulti ? (isSelected ? '✓' : ' ') : String.fromCharCode(65 + displayIdx)}</div>
       <div>${escapeHtml(c.text)}</div>
     `;
     div.addEventListener('click', () => {
-      tq.userAnswer = origIdx;
+      if (isMulti) {
+        // Toggle this choice in the selection array
+        const pos = tq.userAnswer.indexOf(origIdx);
+        if (pos >= 0) tq.userAnswer.splice(pos, 1);
+        else tq.userAnswer.push(origIdx);
+      } else {
+        // Single-select: replace the answer
+        tq.userAnswer = [origIdx];
+      }
       renderQuizQuestion();
     });
     choicesEl.appendChild(div);
@@ -1491,8 +1510,13 @@ function finishQuiz() {
 
   state.testQuestions.forEach(tq => {
     const q = state.questions[tq.qIdx];
-    const correctChoice = q.choices.findIndex(c => c.isCorrect);
-    if (correctChoice !== -1 && tq.userAnswer === correctChoice) correct++;
+    const correctSet = new Set(q.choices.map((c, i) => c.isCorrect ? i : -1).filter(i => i >= 0));
+    const userSet = new Set(tq.userAnswer);
+    if (correctSet.size === 0) return; // no marked answer, can't score
+    // Right iff sets are equal: all correct picked, no wrong picked
+    const isRight = correctSet.size === userSet.size &&
+                    [...correctSet].every(i => userSet.has(i));
+    if (isRight) correct++;
   });
 
   const pct = Math.round(correct / total * 100);
@@ -1513,16 +1537,29 @@ function finishQuiz() {
   review.innerHTML = '';
   state.testQuestions.forEach((tq, i) => {
     const q = state.questions[tq.qIdx];
-    const correctChoice = q.choices.findIndex(c => c.isCorrect);
-    const isRight = correctChoice !== -1 && tq.userAnswer === correctChoice;
-    const userText = tq.userAnswer != null ? q.choices[tq.userAnswer].text : '— skipped —';
-    const correctText = correctChoice !== -1 ? q.choices[correctChoice].text : '— no marked answer —';
+    const correctIdxs = q.choices.map((c, idx) => c.isCorrect ? idx : -1).filter(idx => idx >= 0);
+    const correctSet = new Set(correctIdxs);
+    const userSet = new Set(tq.userAnswer);
+
+    let isRight = false;
+    if (correctSet.size > 0) {
+      isRight = correctSet.size === userSet.size &&
+                [...correctSet].every(idx => userSet.has(idx));
+    }
+
+    const userText = tq.userAnswer.length
+      ? tq.userAnswer.map(idx => q.choices[idx].text).join(' · ')
+      : '— skipped —';
+    const correctText = correctIdxs.length
+      ? correctIdxs.map(idx => q.choices[idx].text).join(' · ')
+      : '— no marked answer —';
+    const isMulti = correctIdxs.length > 1;
 
     const div = document.createElement('div');
     div.className = 'review-q ' + (isRight ? 'right' : 'wrong');
     div.innerHTML = `
       <div class="head">
-        <span>Question ${i+1}</span>
+        <span>Question ${i+1}${isMulti ? ' · multi-select' : ''}</span>
         <span class="verdict">${isRight ? '✓ Correct' : '✗ Wrong'}</span>
       </div>
       <div class="qtext">${escapeHtml(q.text)}</div>
@@ -1572,7 +1609,7 @@ function resetAll() {
 document.addEventListener('keydown', e => {
   const inQuiz = document.getElementById('stage-quiz').classList.contains('active');
   if (!inQuiz) return;
-  if (e.key === 'ArrowRight') document.getElementById('nextBtn').click();
+  if (e.key === 'ArrowRight' || e.key === 'Enter') document.getElementById('nextBtn').click();
   else if (e.key === 'ArrowLeft') document.getElementById('prevBtn').click();
   else if (/^[1-9]$/.test(e.key)) {
     const idx = +e.key - 1;
