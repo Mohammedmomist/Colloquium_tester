@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Colloquium — PDF Test Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root {
+  --ink: #1a1612;
+  --paper: #f4ede0;
+  --paper-2: #ebe1cd;
+  --highlight: #c8f56a;
+  --highlight-deep: #9bd930;
+  --rust: #c64b1f;
+  --muted: #6b6358;
+  --line: #1a1612;
+  --correct: #4a8a2a;
+  --wrong: #c64b1f;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Fraunces', Georgia, serif;
+  font-feature-settings: 'ss01', 'ss02';
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(200,245,106,0.12) 0%, transparent 40%),
+    radial-gradient(circle at 80% 90%, rgba(198,75,31,0.08) 0%, transparent 40%);
+  background-attachment: fixed;
+}
+
+.grain::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  z-index: 1000;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 48px 32px 80px;
+}
+
+/* ============= HEADER ============= */
+header {
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 24px;
+  margin-bottom: 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.brand .mark {
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: 56px;
+  line-height: 0.85;
+  font-style: italic;
+  letter-spacing: -0.04em;
+}
+
+.brand .mark .dot {
+  color: var(--rust);
+}
+
+.brand-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  border-left: 1px solid var(--ink);
+  padding-left: 12px;
+  line-height: 1.6;
+}
+
+.header-right {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  text-align: right;
+  line-height: 1.8;
+}
+
+.header-right .num {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ============= STAGES ============= */
+.stage { display: none; }
+.stage.active { display: block; animation: fadeUp 0.5s cubic-bezier(.2,.7,.2,1); }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============= UPLOAD STAGE ============= */
+.hero {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 48px;
+  align-items: center;
+  margin-bottom: 56px;
+}
+
+@media (max-width: 800px) {
+  .hero { grid-template-columns: 1fr; }
+}
+
+.hero h1 {
+  font-family: 'Fraunces', serif;
+  font-weight: 400;
+  font-size: clamp(40px, 6vw, 72px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+
+.hero h1 em {
+  font-style: italic;
+  color: var(--rust);
+}
+
+.hero h1 .underline-mark {
+  background: linear-gradient(180deg, transparent 60%, var(--highlight) 60%);
+  padding: 0 4px;
+}
+
+.hero p {
+  margin-top: 20px;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 480px;
+}
+
+.hero-aside {
+  border: 2px solid var(--ink);
+  padding: 24px;
+  position: relative;
+  background: var(--paper-2);
+  transform: rotate(0.6deg);
+}
+
+.hero-aside::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 1px solid var(--ink);
+  pointer-events: none;
+}
+
+.hero-aside h3 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  margin-bottom: 16px;
+  color: var(--muted);
+}
+
+.hero-aside ol {
+  list-style: none;
+  counter-reset: step;
+}
+
+.hero-aside ol li {
+  counter-increment: step;
+  padding: 10px 0;
+  border-bottom: 1px dashed rgba(26,22,18,0.2);
+  display: flex;
+  gap: 14px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.hero-aside ol li:last-child { border-bottom: none; }
+
+.hero-aside ol li::before {
+  content: counter(step, decimal-leading-zero);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rust);
+  flex-shrink: 0;
+  padding-top: 3px;
+}
+
+/* ============= DROPZONE ============= */
+.dropzone {
+  border: 2px dashed var(--ink);
+  border-radius: 0;
+  padding: 64px 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  background: var(--paper-2);
+}
+
+.dropzone::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 1px solid rgba(26,22,18,0.3);
+  pointer-events: none;
+}
+
+.dropzone:hover, .dropzone.drag {
+  background: var(--highlight);
+  border-style: solid;
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.dropzone .icon {
+  font-family: 'Fraunces', serif;
+  font-size: 64px;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.dropzone .icon span { color: var(--rust); }
+
+.dropzone .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  margin-top: 16px;
+  color: var(--ink);
+}
+
+.dropzone .sublabel {
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+#fileInput { display: none; }
+
+/* ============= PROCESSING ============= */
+.processing {
+  text-align: center;
+  padding: 80px 32px;
+}
+
+.processing .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+.processing .title {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 48px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  margin-bottom: 32px;
+}
+
+.progress-bar {
+  height: 6px;
+  background: var(--paper-2);
+  border: 1px solid var(--ink);
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar .fill {
+  height: 100%;
+  background: var(--highlight);
+  width: 0%;
+  transition: width 0.3s;
+  position: relative;
+}
+
+.progress-bar .fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(26,22,18,0.1) 6px, rgba(26,22,18,0.1) 12px);
+}
+
+.progress-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  margin-top: 16px;
+  color: var(--muted);
+}
+
+/* ============= PREVIEW STAGE ============= */
+.preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.preview-head h2 {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 40px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.preview-head .stats {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+
+.preview-head .stats strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  padding: 24px;
+  background: var(--paper-2);
+  border: 2px solid var(--ink);
+  margin-bottom: 32px;
+  position: relative;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+
+.control input[type="number"], .control select {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.control.toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.control.toggle input { width: 16px; height: 16px; accent-color: var(--rust); }
+
+.questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.questions-list::-webkit-scrollbar { width: 8px; }
+.questions-list::-webkit-scrollbar-track { background: var(--paper-2); }
+.questions-list::-webkit-scrollbar-thumb { background: var(--ink); }
+
+.q-card {
+  border: 1px solid var(--ink);
+  padding: 16px 20px;
+  background: var(--paper-2);
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.q-card .num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rust);
+  flex-shrink: 0;
+  padding-top: 2px;
+  min-width: 32px;
+}
+
+.q-card .text {
+  flex: 1;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.q-card .answers {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.q-card .answers .correct {
+  color: var(--correct);
+  font-weight: 500;
+}
+
+.q-card .answers .correct::before {
+  content: '✓ ';
+  font-weight: 700;
+}
+
+.q-card.warning {
+  border-color: var(--rust);
+  border-width: 2px;
+  background: rgba(198,75,31,0.05);
+}
+
+.q-card.warning .num { color: var(--rust); }
+
+.q-card .badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  background: var(--rust);
+  color: var(--paper);
+  padding: 2px 6px;
+  margin-left: 8px;
+}
+
+/* ============= BUTTONS ============= */
+.btn-row {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  padding: 16px 28px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+
+.btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.btn:active {
+  transform: translate(0,0);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.btn.primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.btn.primary:hover {
+  background: var(--rust);
+  border-color: var(--rust);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.btn.accent {
+  background: var(--highlight);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ============= QUIZ STAGE ============= */
+.quiz-progress {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.quiz-progress .of {
+  color: var(--muted);
+}
+
+.quiz-progress .num {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 32px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.quiz-progress .timer {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 6px 12px;
+  font-weight: 700;
+}
+
+.quiz-progress-bar {
+  height: 4px;
+  background: var(--paper-2);
+  margin-bottom: 32px;
+  border: 1px solid var(--ink);
+  position: relative;
+  overflow: hidden;
+}
+
+.quiz-progress-bar .fill {
+  height: 100%;
+  background: var(--rust);
+  width: 0%;
+  transition: width 0.3s;
+}
+
+.quiz-question {
+  border: 2px solid var(--ink);
+  background: var(--paper-2);
+  padding: 32px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.quiz-question::before {
+  content: '';
+  position: absolute;
+  top: 6px; left: 6px; right: 6px; bottom: 6px;
+  border: 1px solid rgba(26,22,18,0.2);
+  pointer-events: none;
+}
+
+.quiz-question .q-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 12px;
+}
+
+.quiz-question .q-text {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+
+.quiz-question .q-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.choice:hover {
+  background: var(--highlight);
+  transform: translateX(4px);
+}
+
+.choice .marker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--ink);
+  color: var(--paper);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.choice.selected {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.choice.selected .marker {
+  background: var(--highlight);
+  color: var(--ink);
+}
+
+.choice.selected:hover {
+  background: var(--ink);
+  transform: translateX(4px);
+}
+
+.choice.review-correct {
+  background: rgba(74,138,42,0.15);
+  border-color: var(--correct);
+  border-width: 2px;
+}
+
+.choice.review-correct .marker {
+  background: var(--correct);
+}
+
+.choice.review-wrong {
+  background: rgba(198,75,31,0.12);
+  border-color: var(--wrong);
+  border-width: 2px;
+}
+
+.choice.review-wrong .marker {
+  background: var(--wrong);
+}
+
+.quiz-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 24px;
+  gap: 16px;
+}
+
+/* ============= RESULTS ============= */
+.results-card {
+  border: 2px solid var(--ink);
+  background: var(--paper-2);
+  padding: 48px;
+  text-align: center;
+  position: relative;
+  margin-bottom: 32px;
+}
+
+.results-card::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 1px solid var(--ink);
+  pointer-events: none;
+}
+
+.results-card .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.score-display {
+  font-family: 'Fraunces', serif;
+  font-size: clamp(80px, 14vw, 160px);
+  font-weight: 900;
+  font-style: italic;
+  line-height: 0.85;
+  letter-spacing: -0.05em;
+  margin: 16px 0;
+}
+
+.score-display .pct {
+  font-size: 0.5em;
+  color: var(--rust);
+  font-weight: 400;
+  vertical-align: super;
+}
+
+.score-fraction {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+
+.grade-stamp {
+  display: inline-block;
+  padding: 12px 32px;
+  border: 3px solid var(--rust);
+  color: var(--rust);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin-top: 24px;
+  transform: rotate(-3deg);
+}
+
+.grade-stamp.pass { color: var(--correct); border-color: var(--correct); }
+
+.review-section {
+  margin-top: 48px;
+}
+
+.review-section h3 {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 32px;
+  font-weight: 400;
+  margin-bottom: 24px;
+  letter-spacing: -0.02em;
+}
+
+.review-q {
+  border-left: 3px solid var(--ink);
+  padding: 16px 20px;
+  background: var(--paper-2);
+  margin-bottom: 16px;
+}
+
+.review-q.wrong { border-left-color: var(--wrong); }
+.review-q.right { border-left-color: var(--correct); }
+
+.review-q .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+
+.review-q .verdict {
+  font-weight: 700;
+}
+
+.review-q.wrong .verdict { color: var(--wrong); }
+.review-q.right .verdict { color: var(--correct); }
+
+.review-q .qtext {
+  font-size: 16px;
+  line-height: 1.4;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.review-q .ans-line {
+  font-size: 14px;
+  margin-top: 4px;
+  display: flex;
+  gap: 10px;
+}
+
+.review-q .ans-line .tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  min-width: 75px;
+  color: var(--muted);
+}
+
+/* ============= ERROR ============= */
+.err-banner {
+  border: 2px solid var(--rust);
+  background: rgba(198,75,31,0.08);
+  padding: 16px 20px;
+  margin: 16px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.err-banner strong {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--rust);
+  display: block;
+  margin-bottom: 6px;
+}
+
+footer {
+  margin-top: 80px;
+  padding-top: 24px;
+  border-top: 1px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+</style>
+</head>
+<body class="grain">
+
+<div class="container">
+
+  <header>
+    <div class="brand">
+      <div class="mark">Colloquium<span class="dot">.</span></div>
+      <div class="brand-meta">
+        Vol. I<br/>
+        PDF → Test
+      </div>
+    </div>
+    <div class="header-right">
+      Highlight-aware<br/>
+      <span class="num">v1.0 / 2026</span>
+    </div>
+  </header>
+
+  <!-- ============================================== -->
+  <!-- STAGE 1: UPLOAD                                -->
+  <!-- ============================================== -->
+  <section class="stage active" id="stage-upload">
+    <div class="hero">
+      <div>
+        <h1>
+          Turn any <em>marked-up</em> PDF<br/>
+          into a <span class="underline-mark">randomized test</span>.
+        </h1>
+        <p>
+          Drop in your study PDF where the correct answers are already highlighted
+          or coloured. The app reads the file, finds the marked answers, shuffles
+          everything, and gives you a fresh test every time.
+        </p>
+      </div>
+      <aside class="hero-aside">
+        <h3>How it works</h3>
+        <ol>
+          <li>Upload a PDF where each correct answer is highlighted (any colour) or coloured text.</li>
+          <li>The app parses every question and detects which option is marked.</li>
+          <li>Choose how many questions you want and start the randomized test.</li>
+          <li>Get scored, review your mistakes, and retake with a different shuffle.</li>
+        </ol>
+      </aside>
+    </div>
+
+    <label class="dropzone" id="dropzone" for="fileInput">
+      <div class="icon">PDF<span>.</span></div>
+      <div class="label">Drop file here or click to browse</div>
+      <div class="sublabel">A4 / Letter, multi-page, up to ~50 MB</div>
+      <input type="file" id="fileInput" accept="application/pdf" />
+    </label>
+
+    <div id="errBox"></div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- STAGE 2: PROCESSING                            -->
+  <!-- ============================================== -->
+  <section class="stage" id="stage-processing">
+    <div class="processing">
+      <div class="label">Reading your document</div>
+      <div class="title" id="procTitle">Detecting highlights…</div>
+      <div class="progress-bar"><div class="fill" id="procFill"></div></div>
+      <div class="progress-text" id="procText">Page 0 / 0</div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- STAGE 3: PREVIEW + CONFIGURE                   -->
+  <!-- ============================================== -->
+  <section class="stage" id="stage-preview">
+    <div class="preview-head">
+      <h2>Question bank</h2>
+      <div class="stats">
+        Found <strong id="statTotal">0</strong> questions ·
+        <strong id="statValid">0</strong> with marked answers ·
+        <strong id="statMissing">0</strong> need review
+      </div>
+    </div>
+
+    <div id="previewWarn"></div>
+
+    <div class="controls">
+      <div class="control">
+        <label>How many questions</label>
+        <input type="number" id="cfgCount" min="1" value="20" />
+      </div>
+      <div class="control">
+        <label>Order</label>
+        <select id="cfgOrder">
+          <option value="random">Random shuffle</option>
+          <option value="original">Original order</option>
+        </select>
+      </div>
+      <div class="control toggle">
+        <input type="checkbox" id="cfgShuffleChoices" checked />
+        <label for="cfgShuffleChoices" style="cursor:pointer">Shuffle answer choices</label>
+      </div>
+      <div class="control toggle">
+        <input type="checkbox" id="cfgSkipBad" checked />
+        <label for="cfgSkipBad" style="cursor:pointer">Skip questions with no detected answer</label>
+      </div>
+    </div>
+
+    <div class="questions-list" id="questionsList"></div>
+
+    <div class="btn-row">
+      <button class="btn primary" id="startBtn">Start the test →</button>
+      <button class="btn" id="newPdfBtn">← Different PDF</button>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- STAGE 4: QUIZ                                  -->
+  <!-- ============================================== -->
+  <section class="stage" id="stage-quiz">
+    <div class="quiz-progress">
+      <div>
+        <span class="num" id="quizQNum">01</span>
+        <span class="of"> / <span id="quizQTotal">20</span></span>
+      </div>
+      <div class="timer" id="quizTimer">00:00</div>
+    </div>
+    <div class="quiz-progress-bar"><div class="fill" id="quizFill"></div></div>
+
+    <div class="quiz-question">
+      <div class="q-num" id="quizQLabel">Question 1</div>
+      <div class="q-text" id="quizQText">—</div>
+      <div class="q-meta" id="quizQMeta">Choose one</div>
+      <div class="choices" id="quizChoices"></div>
+    </div>
+
+    <div class="quiz-nav">
+      <button class="btn" id="prevBtn">← Previous</button>
+      <button class="btn primary" id="nextBtn">Next →</button>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- STAGE 5: RESULTS                               -->
+  <!-- ============================================== -->
+  <section class="stage" id="stage-results">
+    <div class="results-card">
+      <div class="label">Final score</div>
+      <div class="score-display">
+        <span id="resScore">0</span><span class="pct">%</span>
+      </div>
+      <div class="score-fraction"><span id="resFrac">0 / 0</span> · <span id="resTime">00:00</span></div>
+      <div class="grade-stamp" id="resStamp">RESULT</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn primary" id="retakeBtn">Retake (new shuffle)</button>
+      <button class="btn accent" id="newTestBtn">Re-configure test</button>
+      <button class="btn" id="newPdfBtn2">Different PDF</button>
+    </div>
+
+    <div class="review-section">
+      <h3>Review</h3>
+      <div id="reviewList"></div>
+    </div>
+  </section>
+
+  <footer>
+    <div>Made for studying · Files never leave your browser</div>
+    <div>Press / to focus · Esc to cancel</div>
+  </footer>
+</div>
+
+<script>
+// ============================================
+// PDF.js config
+// ============================================
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ============================================
+// STATE
+// ============================================
+const state = {
+  questions: [],          // { num, text, choices: [{label, text, isCorrect}], hasMarked }
+  testQuestions: [],      // shuffled, mapped { qIdx, choiceOrder, userAnswer }
+  currentIdx: 0,
+  startTime: 0,
+  timerInterval: null,
+};
+
+// ============================================
+// STAGE NAVIGATION
+// ============================================
+function showStage(id) {
+  document.querySelectorAll('.stage').forEach(s => s.classList.remove('active'));
+  document.getElementById('stage-' + id).classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showError(msg) {
+  document.getElementById('errBox').innerHTML =
+    `<div class="err-banner"><strong>Couldn't process file</strong>${msg}</div>`;
+}
+function clearError() { document.getElementById('errBox').innerHTML = ''; }
+
+// ============================================
+// FILE HANDLING
+// ============================================
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) handleFile(f);
+});
+
+async function handleFile(file) {
+  clearError();
+  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+    showError('Please upload a PDF file.');
+    return;
+  }
+  showStage('processing');
+  try {
+    const items = await extractFromPDF(file);
+    const questions = parseQuestions(items);
+    if (!questions.length) {
+      showStage('upload');
+      showError('No questions could be detected. The PDF needs numbered questions like "1." or "1)" followed by lettered or dashed answer choices.');
+      return;
+    }
+    state.questions = questions;
+    populatePreview();
+    showStage('preview');
+  } catch (err) {
+    console.error(err);
+    showStage('upload');
+    showError('Error reading PDF: ' + err.message);
+  }
+}
+
+// ============================================
+// PDF EXTRACTION (with highlight detection)
+// ============================================
+// Strategy: render each page to a canvas, then for each text item,
+// sample the average colour at its bounding box on the canvas. If
+// the area has saturated colour (highlight or coloured text), mark it.
+
+async function extractFromPDF(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+
+  const fill = document.getElementById('procFill');
+  const text = document.getElementById('procText');
+  const title = document.getElementById('procTitle');
+
+  const allItems = [];
+
+  for (let p = 1; p <= pdf.numPages; p++) {
+    title.textContent = `Reading page ${p} of ${pdf.numPages}…`;
+    text.textContent = `Page ${p} / ${pdf.numPages}`;
+    fill.style.width = ((p - 1) / pdf.numPages * 100) + '%';
+
+    const page = await pdf.getPage(p);
+    const scale = 2.0;
+    const viewport = page.getViewport({ scale });
+
+    // Render to off-screen canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    // Get text content
+    const tc = await page.getTextContent();
+
+    // For each text item determine if it's highlighted
+    for (const item of tc.items) {
+      if (!item.str || !item.str.trim()) continue;
+
+      // Transform coords to viewport pixel space
+      const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+      const x = tx[4];
+      const y = tx[5];
+      const fontSize = Math.hypot(tx[2], tx[3]);
+      const w = item.width * scale;
+      const h = fontSize;
+
+      // Sample box (just behind the text baseline)
+      const sx = Math.max(0, Math.floor(x));
+      const sy = Math.max(0, Math.floor(y - h));
+      const sw = Math.min(canvas.width - sx, Math.max(2, Math.floor(w)));
+      const sh = Math.min(canvas.height - sy, Math.max(2, Math.floor(h)));
+
+      let highlighted = false;
+      let coloredText = false;
+      try {
+        const data = ctx.getImageData(sx, sy, sw, sh).data;
+        const result = analyzePixels(data);
+        highlighted = result.highlighted;
+        coloredText = result.coloredText;
+      } catch (e) { /* OOB or tainted; skip */ }
+
+      allItems.push({
+        page: p,
+        str: item.str,
+        x, y,
+        width: w,
+        height: h,
+        marked: highlighted || coloredText,
+      });
+    }
+  }
+
+  fill.style.width = '100%';
+  title.textContent = 'Parsing questions…';
+  return allItems;
+}
+
+// Analyze a region's pixels to determine if it's highlighted (colored bg)
+// or contains colored text (non-black, saturated text on white).
+function analyzePixels(data) {
+  let hlPixels = 0;          // strongly saturated, bright pixels (highlight bg)
+  let darkColored = 0;       // dark but saturated pixels (coloured text)
+  let total = 0;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+    if (a < 128) continue;
+    total++;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const sat = max === 0 ? 0 : (max - min) / max;
+    const bright = (r + g + b) / 3;
+
+    // Highlight backgrounds: bright AND saturated (yellow, green, cyan, pink etc.)
+    if (sat > 0.35 && bright > 140 && (max - min) > 50) {
+      hlPixels++;
+    }
+    // Coloured text: dark-to-mid pixels with strong saturation (red, green, blue text)
+    else if (sat > 0.45 && bright < 200 && (max - min) > 60) {
+      darkColored++;
+    }
+  }
+  if (!total) return { highlighted: false, coloredText: false };
+  return {
+    highlighted: hlPixels / total > 0.15,
+    coloredText: darkColored / total > 0.18,
+  };
+}
+
+// ============================================
+// QUESTION PARSING
+// ============================================
+// Group items into lines, then into questions.
+function parseQuestions(items) {
+  // Group into lines per page (items with similar y)
+  const lines = [];
+  const byPage = {};
+  items.forEach(it => {
+    if (!byPage[it.page]) byPage[it.page] = [];
+    byPage[it.page].push(it);
+  });
+
+  Object.keys(byPage).sort((a,b)=>+a-+b).forEach(p => {
+    const pg = byPage[p];
+    // group by y bucket
+    const buckets = {};
+    pg.forEach(it => {
+      const key = Math.round(it.y / 6) * 6; // ~6px tolerance
+      if (!buckets[key]) buckets[key] = [];
+      buckets[key].push(it);
+    });
+    Object.keys(buckets)
+      .map(Number)
+      .sort((a,b)=>a-b) // top to bottom (y grows down in viewport coords)
+      .forEach(y => {
+        const line = buckets[y].sort((a,b) => a.x - b.x);
+        const text = line.map(i => i.str).join('').replace(/\s+/g,' ').trim();
+        if (!text) return;
+        const marked = line.some(i => i.marked && i.str.trim().length > 1);
+        lines.push({ page: +p, y, text, marked, items: line });
+      });
+  });
+
+  // Parse: a question starts with "<num>." or "<num>)"
+  // a choice starts with "a)", "b)", ... OR "-" OR "•" OR "*"
+  const qStart = /^(\d{1,3})[.)\]]\s+(.+)/;
+  const choiceLetter = /^([a-zA-Z])[.)\]]\s+(.+)/;
+  const choiceDash = /^[-–•*]\s+(.+)/;
+
+  const questions = [];
+  let cur = null;
+
+  for (const line of lines) {
+    const t = line.text;
+    const mQ = t.match(qStart);
+    if (mQ) {
+      if (cur && cur.choices.length >= 2) questions.push(cur);
+      cur = { num: mQ[1], text: mQ[2].trim(), choices: [], hasMarked: false };
+      continue;
+    }
+
+    if (!cur) continue;
+
+    const mC = t.match(choiceLetter);
+    if (mC) {
+      const isCorrect = line.marked;
+      cur.choices.push({ label: mC[1].toLowerCase(), text: mC[2].trim(), isCorrect });
+      if (isCorrect) cur.hasMarked = true;
+      continue;
+    }
+    const mD = t.match(choiceDash);
+    if (mD) {
+      const isCorrect = line.marked;
+      const label = String.fromCharCode(97 + cur.choices.length);
+      cur.choices.push({ label, text: mD[1].trim(), isCorrect });
+      if (isCorrect) cur.hasMarked = true;
+      continue;
+    }
+
+    // Otherwise: continuation of question OR last choice
+    if (cur.choices.length === 0) {
+      cur.text += ' ' + t;
+    } else {
+      const last = cur.choices[cur.choices.length - 1];
+      // Only append if this looks like a continuation (no colon + question structure)
+      if (t.length < 200) last.text += ' ' + t;
+    }
+  }
+  if (cur && cur.choices.length >= 2) questions.push(cur);
+
+  // Cleanup: remove duplicate spaces
+  questions.forEach(q => {
+    q.text = q.text.replace(/\s+/g,' ').trim();
+    q.choices.forEach(c => c.text = c.text.replace(/\s+/g,' ').trim());
+  });
+
+  return questions;
+}
+
+// ============================================
+// PREVIEW STAGE
+// ============================================
+function populatePreview() {
+  const list = document.getElementById('questionsList');
+  list.innerHTML = '';
+  let valid = 0, missing = 0;
+
+  state.questions.forEach((q, i) => {
+    if (q.hasMarked) valid++; else missing++;
+    const card = document.createElement('div');
+    card.className = 'q-card' + (q.hasMarked ? '' : ' warning');
+    card.innerHTML = `
+      <div class="num">${String(i+1).padStart(2,'0')}</div>
+      <div class="text">
+        ${escapeHtml(q.text)}
+        ${q.hasMarked ? '' : '<span class="badge">No answer detected</span>'}
+        <div class="answers">
+          ${q.choices.map(c => `<div class="${c.isCorrect ? 'correct' : ''}">${c.label}) ${escapeHtml(c.text)}</div>`).join('')}
+        </div>
+      </div>
+    `;
+    list.appendChild(card);
+  });
+
+  document.getElementById('statTotal').textContent = state.questions.length;
+  document.getElementById('statValid').textContent = valid;
+  document.getElementById('statMissing').textContent = missing;
+
+  document.getElementById('cfgCount').max = state.questions.length;
+  document.getElementById('cfgCount').value = Math.min(20, state.questions.length);
+
+  if (missing > 0 && missing === state.questions.length) {
+    document.getElementById('previewWarn').innerHTML = `
+      <div class="err-banner">
+        <strong>Heads up</strong>
+        No highlights or coloured answers were detected in any question. Make sure correct answers in the PDF are visually marked (highlighter background or coloured text). You can still preview the structure below.
+      </div>`;
+  } else if (missing > 0) {
+    document.getElementById('previewWarn').innerHTML = `
+      <div class="err-banner" style="border-color:var(--ink);background:var(--paper-2)">
+        <strong>${missing} question${missing>1?'s':''} without a detected answer</strong>
+        These will be skipped by default — toggle below to include them anyway.
+      </div>`;
+  } else {
+    document.getElementById('previewWarn').innerHTML = '';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ============================================
+// QUIZ START
+// ============================================
+document.getElementById('startBtn').addEventListener('click', () => {
+  const count = +document.getElementById('cfgCount').value;
+  const order = document.getElementById('cfgOrder').value;
+  const shuffleChoices = document.getElementById('cfgShuffleChoices').checked;
+  const skipBad = document.getElementById('cfgSkipBad').checked;
+
+  let pool = state.questions
+    .map((q, idx) => ({ qIdx: idx }))
+    .filter(p => skipBad ? state.questions[p.qIdx].hasMarked : true);
+
+  if (!pool.length) {
+    alert('No questions available with current settings.');
+    return;
+  }
+
+  if (order === 'random') pool = shuffle(pool);
+  pool = pool.slice(0, Math.min(count, pool.length));
+
+  // Build choice orders
+  pool.forEach(p => {
+    const q = state.questions[p.qIdx];
+    const idxs = q.choices.map((_, i) => i);
+    p.choiceOrder = shuffleChoices ? shuffle(idxs) : idxs;
+    p.userAnswer = null;
+  });
+
+  state.testQuestions = pool;
+  state.currentIdx = 0;
+  state.startTime = Date.now();
+  startTimer();
+
+  document.getElementById('quizQTotal').textContent = pool.length;
+  showStage('quiz');
+  renderQuizQuestion();
+});
+
+document.getElementById('newPdfBtn').addEventListener('click', () => {
+  resetAll();
+  showStage('upload');
+});
+
+// ============================================
+// QUIZ RENDERING
+// ============================================
+function renderQuizQuestion() {
+  const tq = state.testQuestions[state.currentIdx];
+  const q = state.questions[tq.qIdx];
+
+  document.getElementById('quizQNum').textContent = String(state.currentIdx + 1).padStart(2, '0');
+  document.getElementById('quizQLabel').textContent = `Question ${state.currentIdx + 1}`;
+  document.getElementById('quizQText').textContent = q.text;
+  document.getElementById('quizQMeta').textContent = 'Choose one';
+
+  const fill = document.getElementById('quizFill');
+  fill.style.width = ((state.currentIdx + 1) / state.testQuestions.length * 100) + '%';
+
+  const choicesEl = document.getElementById('quizChoices');
+  choicesEl.innerHTML = '';
+  tq.choiceOrder.forEach((origIdx, displayIdx) => {
+    const c = q.choices[origIdx];
+    const div = document.createElement('div');
+    div.className = 'choice' + (tq.userAnswer === origIdx ? ' selected' : '');
+    div.innerHTML = `
+      <div class="marker">${String.fromCharCode(65 + displayIdx)}</div>
+      <div>${escapeHtml(c.text)}</div>
+    `;
+    div.addEventListener('click', () => {
+      tq.userAnswer = origIdx;
+      renderQuizQuestion();
+    });
+    choicesEl.appendChild(div);
+  });
+
+  document.getElementById('prevBtn').disabled = state.currentIdx === 0;
+  const isLast = state.currentIdx === state.testQuestions.length - 1;
+  document.getElementById('nextBtn').textContent = isLast ? 'Finish ✓' : 'Next →';
+}
+
+document.getElementById('prevBtn').addEventListener('click', () => {
+  if (state.currentIdx > 0) {
+    state.currentIdx--;
+    renderQuizQuestion();
+  }
+});
+
+document.getElementById('nextBtn').addEventListener('click', () => {
+  if (state.currentIdx < state.testQuestions.length - 1) {
+    state.currentIdx++;
+    renderQuizQuestion();
+  } else {
+    finishQuiz();
+  }
+});
+
+// ============================================
+// TIMER
+// ============================================
+function startTimer() {
+  clearInterval(state.timerInterval);
+  state.timerInterval = setInterval(() => {
+    const s = Math.floor((Date.now() - state.startTime) / 1000);
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    document.getElementById('quizTimer').textContent = `${mm}:${ss}`;
+  }, 1000);
+}
+
+// ============================================
+// RESULTS
+// ============================================
+function finishQuiz() {
+  clearInterval(state.timerInterval);
+  const total = state.testQuestions.length;
+  let correct = 0;
+
+  state.testQuestions.forEach(tq => {
+    const q = state.questions[tq.qIdx];
+    const correctChoice = q.choices.findIndex(c => c.isCorrect);
+    if (correctChoice !== -1 && tq.userAnswer === correctChoice) correct++;
+  });
+
+  const pct = Math.round(correct / total * 100);
+  document.getElementById('resScore').textContent = pct;
+  document.getElementById('resFrac').textContent = `${correct} / ${total}`;
+  const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+  document.getElementById('resTime').textContent =
+    `${String(Math.floor(elapsed/60)).padStart(2,'0')}:${String(elapsed%60).padStart(2,'0')}`;
+
+  const stamp = document.getElementById('resStamp');
+  if (pct >= 90) { stamp.textContent = 'Excellent'; stamp.className = 'grade-stamp pass'; }
+  else if (pct >= 70) { stamp.textContent = 'Pass'; stamp.className = 'grade-stamp pass'; }
+  else if (pct >= 50) { stamp.textContent = 'Keep going'; stamp.className = 'grade-stamp'; }
+  else { stamp.textContent = 'Try again'; stamp.className = 'grade-stamp'; }
+
+  // Review
+  const review = document.getElementById('reviewList');
+  review.innerHTML = '';
+  state.testQuestions.forEach((tq, i) => {
+    const q = state.questions[tq.qIdx];
+    const correctChoice = q.choices.findIndex(c => c.isCorrect);
+    const isRight = correctChoice !== -1 && tq.userAnswer === correctChoice;
+    const userText = tq.userAnswer != null ? q.choices[tq.userAnswer].text : '— skipped —';
+    const correctText = correctChoice !== -1 ? q.choices[correctChoice].text : '— no marked answer —';
+
+    const div = document.createElement('div');
+    div.className = 'review-q ' + (isRight ? 'right' : 'wrong');
+    div.innerHTML = `
+      <div class="head">
+        <span>Question ${i+1}</span>
+        <span class="verdict">${isRight ? '✓ Correct' : '✗ Wrong'}</span>
+      </div>
+      <div class="qtext">${escapeHtml(q.text)}</div>
+      <div class="ans-line"><span class="tag">Your answer</span><span>${escapeHtml(userText)}</span></div>
+      <div class="ans-line"><span class="tag">Correct</span><span>${escapeHtml(correctText)}</span></div>
+    `;
+    review.appendChild(div);
+  });
+
+  showStage('results');
+}
+
+document.getElementById('retakeBtn').addEventListener('click', () => {
+  // Re-run with same settings → re-shuffle
+  document.getElementById('startBtn').click();
+});
+document.getElementById('newTestBtn').addEventListener('click', () => {
+  showStage('preview');
+});
+document.getElementById('newPdfBtn2').addEventListener('click', () => {
+  resetAll();
+  showStage('upload');
+});
+
+// ============================================
+// HELPERS
+// ============================================
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function resetAll() {
+  state.questions = [];
+  state.testQuestions = [];
+  state.currentIdx = 0;
+  clearInterval(state.timerInterval);
+  fileInput.value = '';
+  clearError();
+}
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  const inQuiz = document.getElementById('stage-quiz').classList.contains('active');
+  if (!inQuiz) return;
+  if (e.key === 'ArrowRight') document.getElementById('nextBtn').click();
+  else if (e.key === 'ArrowLeft') document.getElementById('prevBtn').click();
+  else if (/^[1-9]$/.test(e.key)) {
+    const idx = +e.key - 1;
+    const choices = document.querySelectorAll('#quizChoices .choice');
+    if (choices[idx]) choices[idx].click();
+  }
+});
+</script>
+
+</body>
+</html>
