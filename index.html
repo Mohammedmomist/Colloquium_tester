@@ -1097,11 +1097,11 @@ async function handleFile(file) {
   }
   showStage('processing');
   try {
-    const items = await extractFromPDF(file);
-    const questions = parseQuestions(items);
+    const { items, pageTexts } = await extractFromPDF(file);
+    const questions = parseQuestions(items, pageTexts);
     if (!questions.length) {
       showStage('upload');
-      showError('No questions could be detected. The PDF needs numbered questions like "1." or "1)" followed by lettered or dashed answer choices.');
+      showError('No questions could be detected. The PDF needs numbered questions like "1." or "1)" followed by lettered answer choices, with either highlighted correct answers OR an "Answer:" line.');
       return;
     }
     state.questions = questions;
@@ -1121,6 +1121,13 @@ async function handleFile(file) {
 // sample the average colour at its bounding box on the canvas. If
 // the area has saturated colour (highlight or coloured text), mark it.
 
+// ============================================
+// PDF EXTRACTION (with highlight detection)
+// ============================================
+// We extract two things per page:
+//   1. Per-text-item highlight info (for highlighted-PDF format)
+//   2. The full concatenated page text (for "Answer:X" format with no spaces)
+
 async function extractFromPDF(file) {
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -1130,6 +1137,7 @@ async function extractFromPDF(file) {
   const title = document.getElementById('procTitle');
 
   const allItems = [];
+  const pageTexts = []; // [{ page, text }] — concatenated raw text per page
 
   for (let p = 1; p <= pdf.numPages; p++) {
     title.textContent = `Reading page ${p} of ${pdf.numPages}…`;
@@ -1140,42 +1148,42 @@ async function extractFromPDF(file) {
     const scale = 2.0;
     const viewport = page.getViewport({ scale });
 
-    // Render to off-screen canvas
+    // Render page to off-screen canvas (for highlight detection)
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     await page.render({ canvasContext: ctx, viewport }).promise;
 
-    // Get text content
     const tc = await page.getTextContent();
+    let pageText = '';
 
-    // For each text item determine if it's highlighted
     for (const item of tc.items) {
-      if (!item.str || !item.str.trim()) continue;
+      if (!item.str) continue;
+      pageText += item.str;
+      if (item.hasEOL) pageText += '\n';
+      else pageText += ' '; // restore inter-item separator
+      if (!item.str.trim()) continue;
 
-      // Transform coords to viewport pixel space
+      // Highlight detection
       const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
-      const x = tx[4];
-      const y = tx[5];
+      const x = tx[4], y = tx[5];
       const fontSize = Math.hypot(tx[2], tx[3]);
       const w = item.width * scale;
       const h = fontSize;
 
-      // Sample box (just behind the text baseline)
       const sx = Math.max(0, Math.floor(x));
       const sy = Math.max(0, Math.floor(y - h));
       const sw = Math.min(canvas.width - sx, Math.max(2, Math.floor(w)));
       const sh = Math.min(canvas.height - sy, Math.max(2, Math.floor(h)));
 
-      let highlighted = false;
-      let coloredText = false;
+      let highlighted = false, coloredText = false;
       try {
         const data = ctx.getImageData(sx, sy, sw, sh).data;
         const result = analyzePixels(data);
         highlighted = result.highlighted;
         coloredText = result.coloredText;
-      } catch (e) { /* OOB or tainted; skip */ }
+      } catch (e) { /* skip */ }
 
       allItems.push({
         page: p,
@@ -1186,11 +1194,13 @@ async function extractFromPDF(file) {
         marked: highlighted || coloredText,
       });
     }
+
+    pageTexts.push({ page: p, text: pageText });
   }
 
   fill.style.width = '100%';
   title.textContent = 'Parsing questions…';
-  return allItems;
+  return { items: allItems, pageTexts };
 }
 
 // Analyze a region's pixels to determine if it's highlighted (colored bg)
@@ -1229,8 +1239,31 @@ function analyzePixels(data) {
 // ============================================
 // QUESTION PARSING
 // ============================================
-// Group items into lines, then into questions.
-function parseQuestions(items) {
+// Two supported formats:
+//   A) Highlighted PDF — correct answers visually marked (existing behaviour).
+//   B) "Answer: X" PDF — explicit text marker after each question.
+//
+// Auto-detect: if the joined document text contains multiple "Answer:" tokens,
+// use parser B. Otherwise use parser A.
+
+function parseQuestions(items, pageTexts) {
+  const fullText = pageTexts.map(p => p.text).join('\n');
+  const answerMarkerCount = (fullText.match(/\bAnswers?\s*:?\s*[a-fA-F]\b/gi) || []).length;
+
+  // If we see at least 3 "Answer:X" markers, treat as text-marker format.
+  if (answerMarkerCount >= 3) {
+    const qs = parseAnswerMarkerFormat(fullText);
+    if (qs.length) return qs;
+    // fall through if it failed
+  }
+
+  return parseHighlightFormat(items);
+}
+
+// ----------------------------------------------------------------
+// Format A: Highlighted PDF — line-based, uses pixel-detected marks
+// ----------------------------------------------------------------
+function parseHighlightFormat(items) {
   // Group into lines per page (items with similar y)
   const lines = [];
   const byPage = {};
@@ -1241,16 +1274,15 @@ function parseQuestions(items) {
 
   Object.keys(byPage).sort((a,b)=>+a-+b).forEach(p => {
     const pg = byPage[p];
-    // group by y bucket
     const buckets = {};
     pg.forEach(it => {
-      const key = Math.round(it.y / 6) * 6; // ~6px tolerance
+      const key = Math.round(it.y / 6) * 6;
       if (!buckets[key]) buckets[key] = [];
       buckets[key].push(it);
     });
     Object.keys(buckets)
       .map(Number)
-      .sort((a,b)=>a-b) // top to bottom (y grows down in viewport coords)
+      .sort((a,b)=>a-b)
       .forEach(y => {
         const line = buckets[y].sort((a,b) => a.x - b.x);
         const text = line.map(i => i.str).join('').replace(/\s+/g,' ').trim();
@@ -1260,8 +1292,6 @@ function parseQuestions(items) {
       });
   });
 
-  // Parse: a question starts with "<num>." or "<num>)"
-  // a choice starts with "a)", "b)", ... OR "-" OR "•" OR "*"
   const qStart = /^(\d{1,3})[.)\]]\s+(.+)/;
   const choiceLetter = /^([a-zA-Z])[.)\]]\s+(.+)/;
   const choiceDash = /^[-–•*]\s+(.+)/;
@@ -1277,7 +1307,6 @@ function parseQuestions(items) {
       cur = { num: mQ[1], text: mQ[2].trim(), choices: [], hasMarked: false };
       continue;
     }
-
     if (!cur) continue;
 
     const mC = t.match(choiceLetter);
@@ -1295,25 +1324,208 @@ function parseQuestions(items) {
       if (isCorrect) cur.hasMarked = true;
       continue;
     }
-
-    // Otherwise: continuation of question OR last choice
-    if (cur.choices.length === 0) {
-      cur.text += ' ' + t;
-    } else {
+    if (cur.choices.length === 0) cur.text += ' ' + t;
+    else {
       const last = cur.choices[cur.choices.length - 1];
-      // Only append if this looks like a continuation (no colon + question structure)
       if (t.length < 200) last.text += ' ' + t;
     }
   }
   if (cur && cur.choices.length >= 2) questions.push(cur);
 
-  // Cleanup: remove duplicate spaces
   questions.forEach(q => {
     q.text = q.text.replace(/\s+/g,' ').trim();
     q.choices.forEach(c => c.text = c.text.replace(/\s+/g,' ').trim());
   });
+  return questions;
+}
+
+// ----------------------------------------------------------------
+// Format B: Answer-marker PDF — uses regex on concatenated text.
+// Handles squished text where words are jammed together.
+// ----------------------------------------------------------------
+//
+// Strategy:
+//  1. Normalize all whitespace (collapse newlines and multiple spaces).
+//  2. Find every "Answer: X" marker and the question number that precedes it.
+//  3. Slice the text between question N and its Answer marker → the body.
+//  4. From the body, extract question stem + lettered choices.
+//
+// Question pattern allows: "1.", "1)", "Q1.", optional spaces.
+// Choice pattern: a letter followed by ".", ")" or ":" then content.
+// We accept choices a–f (most question banks use a–e or a–f).
+
+function parseAnswerMarkerFormat(rawText) {
+  // Normalize: collapse all whitespace. Words may be squished — that's fine,
+  // we'll surface it to the user as-is. Question numbers and "Answer:" tokens
+  // are still recognizable.
+  let t = rawText.replace(/\s+/g, ' ').trim();
+
+  // Find all answer markers. Captures one OR multiple STANDALONE letters
+  // (each followed by non-letter so we don't grab the start of a word).
+  //   "Answer: c"        → ["c"]
+  //   "Answer: a, b"     → ["a","b"]
+  //   "Answer: a,b,c"    → ["a","b","c"]
+  //   "Answer: a and b"  → ["a","b"]
+  //   "Answer: a & b"    → ["a","b"]
+  //   "Answer: a/b"      → ["a","b"]
+  //   "Answer:c Foo..."  → ["c"]  (does NOT grab the "F" or anything from "Foo")
+  // The key: each letter token is `[a-f]` followed by a non-letter (or end).
+  // We then run a follow-up pattern to optionally extend with separator + next letter.
+  const answerRegex = /\bAnswers?\s*:?\s*([a-fA-F])(?![A-Za-z])/gi;
+  const markers = [];
+  let m;
+  while ((m = answerRegex.exec(t)) !== null) {
+    const letters = [m[1].toLowerCase()];
+    let pos = m.index + m[0].length;
+
+    // Try to extend: while we see (separator? letter not-followed-by-letter), grab it
+    while (pos < t.length) {
+      // Skip optional separator: comma, "and", "&", "/", or just whitespace
+      const sepMatch = /^(?:\s*(?:,|and|&|\/)\s*|\s+)([a-fA-F])(?![A-Za-z])/i.exec(t.slice(pos));
+      if (!sepMatch) break;
+      letters.push(sepMatch[1].toLowerCase());
+      pos += sepMatch[0].length;
+    }
+
+    markers.push({
+      idx: m.index,
+      end: pos,
+      letters: [...new Set(letters)],
+    });
+  }
+  if (markers.length === 0) return [];
+
+  // Find all candidate question starts. A question starts with a number 1–999
+  // followed by ".", ")" or ":" and then a space + capital letter (the start
+  // of the actual question text). We require the number not to be preceded
+  // by a letter or digit (so we don't grab "1" inside other text).
+  // Match on word boundaries.
+  const qRegex = /(?:^|[^A-Za-z0-9])(\d{1,3})\s*[.)\]]\s*([A-Z(])/g;
+  const qStarts = [];
+  while ((m = qRegex.exec(t)) !== null) {
+    // Position where the question NUMBER actually starts (skip the leading boundary char)
+    const numStart = m.index + (m[0].length - m[1].length - 2 - 1) + (m.index === 0 ? 0 : 1);
+    // Simpler: search for the digit position from m.index
+    const digitOffset = m[0].search(/\d/);
+    qStarts.push({
+      idx: m.index + digitOffset,
+      num: parseInt(m[1], 10),
+      bodyStart: m.index + digitOffset + m[1].length, // right after the number
+    });
+  }
+
+  if (qStarts.length === 0) return [];
+
+  // For each answer marker, find the LATEST question start before it.
+  // Then the question body = text from that question start up to the answer marker.
+  const questions = [];
+  for (let i = 0; i < markers.length; i++) {
+    const marker = markers[i];
+    // Find latest qStart before marker.idx that we haven't already used too far back
+    let qs = null;
+    for (let j = qStarts.length - 1; j >= 0; j--) {
+      if (qStarts[j].idx < marker.idx) { qs = qStarts[j]; break; }
+    }
+    if (!qs) continue;
+
+    // Body: everything between question number and "Answer:" marker.
+    const body = t.slice(qs.bodyStart, marker.idx).trim()
+      // Strip leading "." or ")" left over from the number's punctuation
+      .replace(/^[.)\]:\s]+/, '');
+
+    if (!body) continue;
+
+    const parsed = splitQuestionAndChoices(body);
+    if (!parsed) continue;
+
+    // Mark the correct choice(s) based on the answer letters
+    const correctLetters = new Set(marker.letters);
+    let foundCorrect = false;
+    parsed.choices.forEach(c => {
+      if (correctLetters.has(c.label)) {
+        c.isCorrect = true;
+        foundCorrect = true;
+      }
+    });
+
+    questions.push({
+      num: String(qs.num),
+      text: parsed.stem,
+      choices: parsed.choices,
+      hasMarked: foundCorrect,
+    });
+  }
 
   return questions;
+}
+
+// Given a question body like:
+//   "WhatisX? a.OptionOne b.OptionTwo c.OptionThree d.OptionFour"
+// or  "What is X? a) Option One b) Option Two c) Option Three d) Option Four"
+// return { stem, choices: [{label, text, isCorrect: false}] }
+function splitQuestionAndChoices(body) {
+  // Look for choice markers. A choice marker is a single letter a–f followed
+  // by ".", ")", or ":", that comes after a non-letter (so we don't match
+  // letters inside words). We also require the next char after the punctuation
+  // to be a letter or space (the start of choice content).
+  const choiceMarker = /(?:^|[^A-Za-z0-9])([a-fA-F])\s*[.):]\s*(?=[A-Za-z(])/g;
+
+  const matches = [];
+  let m;
+  while ((m = choiceMarker.exec(body)) !== null) {
+    const letterOffset = m[0].search(/[a-fA-F]/);
+    matches.push({
+      letter: m[1].toLowerCase(),
+      idx: m.index + letterOffset,        // position of the letter itself
+      bodyStart: m.index + m[0].length,   // start of choice content
+    });
+  }
+
+  if (matches.length < 2) return null;
+
+  // Filter: choices should appear in order a, b, c... (mostly).
+  // Sometimes "a." appears inside text. We greedily build the longest
+  // increasing-letter sequence starting from the first occurrence of "a".
+  const filtered = filterToValidChoiceSequence(matches);
+  if (filtered.length < 2) return null;
+
+  const firstChoice = filtered[0];
+  const stem = body.slice(0, firstChoice.idx).trim().replace(/[\s.:]+$/, '');
+
+  const choices = filtered.map((c, i) => {
+    const next = filtered[i + 1];
+    const endIdx = next ? next.idx : body.length;
+    let txt = body.slice(c.bodyStart, endIdx).trim();
+    // Trim trailing junk
+    txt = txt.replace(/[\s.:]+$/, '');
+    return { label: c.letter, text: txt, isCorrect: false };
+  });
+
+  if (!stem || stem.length < 3) return null;
+
+  return { stem, choices };
+}
+
+// From candidate choice markers, pick the longest valid sequence
+// starting with 'a' that has letters in increasing order.
+function filterToValidChoiceSequence(matches) {
+  // Find first occurrence of letter 'a'
+  const startIdx = matches.findIndex(m => m.letter === 'a');
+  if (startIdx === -1) {
+    // No 'a' — try to start with whatever's first if it's a-f and chains
+    return matches; // give up, return raw
+  }
+
+  const result = [matches[startIdx]];
+  let expected = 'b';
+  for (let i = startIdx + 1; i < matches.length; i++) {
+    if (matches[i].letter === expected) {
+      result.push(matches[i]);
+      expected = String.fromCharCode(expected.charCodeAt(0) + 1);
+    }
+    // else: skip — it might be a stray match (e.g. "a." inside another word)
+  }
+  return result;
 }
 
 // ============================================
@@ -1375,6 +1587,15 @@ function escapeHtml(s) {
   return String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Format a list of choice indices as "a, b" (sorted alphabetically by letter).
+// Always returns just the letters separated by commas — like the PDF format.
+function formatAnswerLetters(choiceIdxs, choices) {
+  const letters = choiceIdxs
+    .map(idx => choices[idx].label)
+    .sort();
+  return letters.join(', ');
 }
 
 // ============================================
@@ -1548,10 +1769,10 @@ function finishQuiz() {
     }
 
     const userText = tq.userAnswer.length
-      ? tq.userAnswer.map(idx => q.choices[idx].text).join(' · ')
+      ? formatAnswerLetters(tq.userAnswer, q.choices)
       : '— skipped —';
     const correctText = correctIdxs.length
-      ? correctIdxs.map(idx => q.choices[idx].text).join(' · ')
+      ? formatAnswerLetters(correctIdxs, q.choices)
       : '— no marked answer —';
     const isMulti = correctIdxs.length > 1;
 
