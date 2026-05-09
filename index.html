@@ -1071,6 +1071,7 @@ const state = {
   currentIdx: 0,
   startTime: 0,
   timerInterval: null,
+  seenIdxs: new Set(),    // question indices used in tests this session
 };
 
 // ============================================
@@ -1123,6 +1124,7 @@ async function handleFile(file) {
       return;
     }
     state.questions = questions;
+    state.seenIdxs.clear();  // fresh seen set for new PDF
     populatePreview();
     showStage('preview');
   } catch (err) {
@@ -1628,17 +1630,38 @@ document.getElementById('startBtn').addEventListener('click', () => {
   const shuffleChoices = document.getElementById('cfgShuffleChoices').checked;
   const skipBad = document.getElementById('cfgSkipBad').checked;
 
-  let pool = state.questions
+  // Eligible question pool (respecting skipBad)
+  const eligible = state.questions
     .map((q, idx) => ({ qIdx: idx }))
     .filter(p => skipBad ? state.questions[p.qIdx].hasMarked : true);
 
-  if (!pool.length) {
+  if (!eligible.length) {
     alert('No questions available with current settings.');
     return;
   }
 
-  if (order === 'random') pool = shuffle(pool);
+  // Split into unseen (preferred) and seen (fallback)
+  const unseen = eligible.filter(p => !state.seenIdxs.has(p.qIdx));
+  const seen = eligible.filter(p => state.seenIdxs.has(p.qIdx));
+
+  // If we've cycled through everything, reset and start over
+  let pool;
+  if (unseen.length === 0) {
+    state.seenIdxs.clear();
+    pool = order === 'random' ? shuffle(eligible) : eligible.slice();
+  } else if (unseen.length >= count || order === 'original') {
+    // Enough unseen to fill the test (or original-order mode)
+    pool = order === 'random' ? shuffle(unseen) : unseen.slice();
+  } else {
+    // Not enough unseen — use all unseen first, then top up with seen
+    const filler = shuffle(seen).slice(0, count - unseen.length);
+    pool = shuffle([...unseen, ...filler]);
+  }
+
   pool = pool.slice(0, Math.min(count, pool.length));
+
+  // Mark these as seen (for next test in this session)
+  pool.forEach(p => state.seenIdxs.add(p.qIdx));
 
   // Build choice orders
   pool.forEach(p => {
@@ -1842,6 +1865,7 @@ function resetAll() {
   state.questions = [];
   state.testQuestions = [];
   state.currentIdx = 0;
+  state.seenIdxs.clear();
   clearInterval(state.timerInterval);
   fileInput.value = '';
   clearError();
